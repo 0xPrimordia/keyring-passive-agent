@@ -1,95 +1,114 @@
 # 🦌⚡ KeyRing Passive Agent
 
-Passive agent signers for the KeyRing protocol on Hedera network. Handles inactive signers and threshold rollover by signing schedules when instructed by the keyring operator.
+Passive agent signers for the KeyRing protocol on Hedera network. Signs scheduled transactions when notified—no polling, no active monitoring.
 
 ## Overview
 
-The KeyRing Passive Agent is a lightweight agent that subscribes to an **operator inbound topic** and signs scheduled transactions when the keyring operator posts a schedule ID. Unlike the active KeyRing Signer Agent (which polls and validates), the passive agent trusts operator-initiated messages and signs immediately—no rejection checks, no signature-count minimum.
+The KeyRing protocol uses **threshold multi-signature scheduled transactions** on Hedera. A scheduled transaction requires N-of-M signatures before it executes. The KeyRing Passive Agent is a signer that **does not poll** for pending schedules. Instead, it subscribes to an HCS topic and signs only when the keyring operator (or upstream trigger) posts a schedule ID.
 
-Use cases:
-- **Inactive signers:** Signers that don't run active monitoring but need to sign when notified
-- **Threshold rollover:** Add new signers to a threshold list; passive agents sign when the operator triggers them
-- **Cold signers:** Keys held in secure storage; agent runs only when operator sends a schedule ID
+### Main Flow: Scheduled Signing
+
+1. **Scheduled transaction exists** on Hedera—created by the threshold account, requiring multiple signatures.
+2. **Trigger** notifies the agent:
+   - **Direct:** Operator posts schedule ID to the operator inbound topic.
+   - **Scheduled:** `ScheduleReviewTrigger` contract schedules a future execution; when it runs, it emits `ReviewTriggered(scheduleId, topicId1, topicId2)`; a listener subscribes via `eth_subscribe`, posts the schedule ID to the HCS topic.
+3. **Agent receives** the schedule ID → fetches schedule info from mirror node → signs if not yet executed.
+4. **Execution:** When the threshold is met, Hedera auto-executes the scheduled transaction.
+
+### Why Passive?
+
+Unlike the active [KeyRing Signer Agent](https://github.com/kevincompton/keyring-signer-agent) (which polls, validates, and may reject), the passive agent:
+
+- **Subscribes** to an HCS topic and waits—no polling.
+- **Trusts** operator-initiated messages—signs immediately, no rejection checks.
+- Suited for **inactive signers**, **threshold rollover**, and **cold signers** that only run when triggered.
 
 ## Architecture
 
 ```mermaid
 graph TB
     subgraph Hedera["🌐 HEDERA NETWORK"]
-        subgraph HCS["📋 HCS TOPICS"]
-            OperatorTopic["OPERATOR_INBOUND_TOPIC_ID<br/>Keyring operator posts schedule IDs"]
+        subgraph Schedules["📅 SCHEDULED TRANSACTIONS"]
+            Pending["Pending multi-sig TXs<br/>Threshold account creates<br/>Requires N-of-M signatures"]
         end
         
-        subgraph Schedules["📅 SCHEDULED TRANSACTIONS"]
-            Pending["Pending multi-sig TXs<br/>Agent signs when instructed"]
+        subgraph HCS["📋 HCS TOPICS"]
+            OperatorTopic["OPERATOR_INBOUND_TOPIC_ID<br/>Operator posts schedule IDs"]
         end
         
         Mirror["🔍 MIRROR NODE<br/>Query schedule info"]
     end
     
-    subgraph External["🔗 EXTERNAL STACK"]
-        Listener["Listener (eth_subscribe)"]
-        Contract["ScheduleReviewTrigger contract"]
-        Contract -->|Emits event| Listener
-        Listener -->|Posts schedule ID| OperatorTopic
+    subgraph Triggers["🔔 TRIGGER PATHS"]
+        Direct["Direct: Operator posts<br/>schedule ID to topic"]
+        Contract["ScheduleReviewTrigger<br/>scheduleReviewTrigger(scheduleId, duration, topic1, topic2)"]
+        Contract -->|1 HBAR, schedules via HSS| Emit["At now+duration:<br/>emitReviewTrigger → ReviewTriggered"]
+        Emit --> Listener
+        Listener["Listener (eth_subscribe)<br/>Posts schedule ID to topic"]
     end
     
     subgraph Agent["🤖 KEYRING PASSIVE AGENT"]
-        direction TB
-        Subscribe["TopicMessageQuery<br/>Subscribe to operator topic"]
-        Tools["Tools<br/>• Get Schedule Info<br/>• Sign Transaction"]
-        SDK["Hedera SDK<br/>Client & Signing"]
-        
-        Subscribe --> Tools
-        Tools --> SDK
+        Subscribe["TopicMessageQuery.subscribe"]
+        GetInfo["Get Schedule Info"]
+        Sign["Sign Transaction"]
+        Subscribe --> GetInfo --> Sign
     end
     
-    OperatorTopic -->|1. Message with schedule ID| Agent
-    Agent -->|2. Fetch schedule| Mirror
-    Agent -->|3. Sign if not executed| Pending
+    Direct --> OperatorTopic
+    Listener --> OperatorTopic
+    OperatorTopic --> Subscribe
+    Agent -->|Fetch info| Mirror
+    Agent -->|Sign| Pending
     
     classDef hederaClass fill:#0066cc,stroke:#003d7a,color:#fff
     classDef agentClass fill:#22c55e,stroke:#16a34a,color:#fff
-    classDef topicClass fill:#06b6d4,stroke:#0891b2,color:#fff
+    classDef triggerClass fill:#f59e0b,stroke:#d97706,color:#fff
     
     class Hedera,Mirror,Schedules hederaClass
-    class Agent,Subscribe,Tools,SDK agentClass
-    class HCS,OperatorTopic topicClass
+    class Agent,Subscribe,GetInfo,Sign agentClass
+    class Triggers,Direct,Contract,Emit,Listener triggerClass
 ```
 
 ### Workflow
 
-**1. Operator Triggers**
-- Keyring operator (or upstream listener) posts a schedule ID to `OPERATOR_INBOUND_TOPIC_ID`
-- Message format: `{"scheduleId": "0.0.1234"}` or plain `0.0.1234`
+**1. Scheduled Transaction Creation**
 
-**2. Agent Receives**
-- All agents subscribe to the same operator topic
-- Each agent receives the message independently
+- Threshold account (or keyring operator) creates a scheduled transaction on Hedera.
+- Transaction waits for N-of-M signatures.
 
-**3. Sign Immediately**
-- Agent fetches schedule info from mirror node
-- If schedule exists and is not yet executed → sign
-- No rejection checks, no minimum signature count (operator-initiated = trusted)
+**2. Trigger (choose one)**
+
+| Path | How |
+|------|-----|
+| **Direct** | Operator posts `{"scheduleId": "0.0.1234"}` or `0.0.1234` to `OPERATOR_INBOUND_TOPIC_ID`. |
+| **Scheduled** | Call `ScheduleReviewTrigger.scheduleReviewTrigger(scheduleId, durationSeconds, topicId1, topicId2)` with 1 HBAR. At `now + durationSeconds`, contract emits `ReviewTriggered`. Listener subscribes via `eth_subscribe`, posts schedule ID to HCS topic. |
+
+**3. Agent Processing**
+
+- Agent receives message → parses schedule ID.
+- Fetches schedule info from mirror node (executed? signature count?).
+- If not executed → signs with `ScheduleSignTransaction`.
+- Skips if already executed.
 
 **4. Execution**
-- When threshold is met, transaction executes on Hedera
+
+- When threshold is met, Hedera executes the scheduled transaction on-chain.
 
 ## Features
 
-- ✅ **Multi-agent:** Run multiple signers in one process; each has its own account
-- ✅ **Operator-triggered:** Signs only when keyring operator posts a schedule ID
-- ✅ **Immediate signing:** No polling, no validation delay—trust the operator
-- ✅ **HCS subscription:** Real-time via Hedera `TopicMessageQuery.subscribe`
-- ✅ **Utilities:** Create accounts, fund agents, send test schedules
+- ✅ **Scheduled signing:** Signs Hedera scheduled transactions when notified.
+- ✅ **Multi-agent:** Run multiple signers in one process; each has its own account.
+- ✅ **Two trigger paths:** Direct operator topic or `ScheduleReviewTrigger` + listener.
+- ✅ **HCS subscription:** Real-time via `TopicMessageQuery.subscribe`—no polling.
+- ✅ **Utilities:** Create accounts, fund agents, send test schedules via contract.
 
 ## Quick Start
 
 ### Prerequisites
 
 - Node.js 18+
-- Hedera testnet account with HBAR (for funding agent accounts)
-- Operator inbound topic (created by keyring operator stack)
+- Hedera testnet account with HBAR (for funding agent accounts and contract)
+- Operator inbound topic (or create via `create:accounts`)
 
 ### Installation
 
@@ -111,6 +130,8 @@ AGENT_CONFIGS='[{"accountId":"0.0.1","privateKey":"302e...","operatorPublicKey":
 HEDERA_NETWORK=testnet
 OPERATOR_INBOUND_TOPIC_ID=0.0.xxxxx   # Topic where operator posts schedule IDs
 ```
+
+Single-agent fallback: set `HEDERA_ACCOUNT_ID`, `HEDERA_PRIVATE_KEY`, `OPERATOR_PUBLIC_KEY`.
 
 ### Running
 
@@ -154,9 +175,9 @@ npm start                    # Run agent (production)
 npm run build                # Compile TypeScript
 npm run create:accounts      # Create 2 agent accounts + topics (output AGENT_CONFIGS)
 npm run fund:agents          # Fund agent accounts with HBAR
-npm run send:test-schedule   # Send test schedule to ScheduleReviewTrigger (requires SCHEDULE_REVIEW_CONTRACT_ID)
+npm run send:test-schedule   # Call ScheduleReviewTrigger (requires SCHEDULE_REVIEW_CONTRACT_ID, SCHEDULE_ID)
 npm run contracts:build      # Compile Solidity
-npm run contracts:deploy     # Deploy ScheduleReviewTrigger
+npm run contracts:deploy     # Deploy ScheduleReviewTrigger (deploy with 1 HBAR)
 ```
 
 ## Message Format
@@ -166,20 +187,19 @@ The operator topic expects messages containing a schedule ID:
 - **JSON:** `{"scheduleId": "0.0.1234"}` or `{"schedule_id": "0.0.1234"}`
 - **Plain:** `0.0.1234`
 
-## Upstream Stack
+## ScheduleReviewTrigger Contract
 
-This agent subscribes to an operator topic. The **listener stack** (separate repo) bridges contract events to that topic:
+The contract enables **time-delayed** triggers: schedule a future execution that emits `ReviewTriggered(scheduleId, topicId1, topicId2)`.
 
-1. Contract emits `ReviewTriggered(scheduleId, topicId1, topicId2)`
-2. Listener subscribes via `eth_subscribe` (Hedera RPC Relay)
-3. Listener posts schedule ID to operator topic
-4. Passive agent receives and signs
+- **`scheduleReviewTrigger(scheduleId, durationSeconds, topicId1, topicId2)`** — payable, requires 1 HBAR.
+- Schedules a one-time call at `now + durationSeconds` (max 62 days).
+- When it runs, emits `ReviewTriggered`; listener subscribes via `eth_subscribe` and posts schedule ID to the HCS topic.
 
-See [docs/event-trigger-stack.md](./docs/event-trigger-stack.md) for details.
+See [docs/event-trigger-stack.md](./docs/event-trigger-stack.md) for the full listener stack.
 
 ## Technologies
 
-- **Hedera SDK:** HCS subscription, schedule signing
+- **Hedera SDK:** HCS subscription, `ScheduleSignTransaction`, mirror node queries
 - **TypeScript:** Type-safe development
 
 ## Security Considerations
