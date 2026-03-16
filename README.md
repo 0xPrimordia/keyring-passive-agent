@@ -11,17 +11,41 @@ The KeyRing protocol uses **threshold multi-signature scheduled transactions** o
 1. **Scheduled transaction exists** on Hedera—created by the threshold account, requiring multiple signatures.
 2. **Trigger** notifies the agent:
    - **Direct:** Operator posts schedule ID to the operator inbound topic.
-   - **Scheduled:** `ScheduleReviewTrigger` contract schedules a future execution; when it runs, it emits `ReviewTriggered(scheduleId, topicId1, topicId2)`; a listener subscribes via `eth_subscribe`, posts the schedule ID to the HCS topic.
-3. **Agent receives** the schedule ID → fetches schedule info from mirror node → signs if not yet executed.
+   - **Automated (validator-initiated):** The [KeyRing Signer Agent](https://github.com/kevincompton/keyring-signer-agent) (validator) calls `ScheduleReviewTrigger.scheduleReviewTrigger(scheduleId, durationSeconds, topicId1, topicId2)` to schedule a future trigger—typically **one hour before the schedule expires**—so passive signers have time to sign. The contract uses the **Hedera Schedule Service (HSS)** via `scheduleCall` (HIP-1215) to schedule a one-time execution. At the scheduled time, the contract emits `ReviewTriggered(scheduleId, topicId1, topicId2)`. A listener subscribes via `eth_subscribe` (HIP-694), posts the schedule ID to the HCS topic.
+3. **Agent receives** the schedule ID → fetches schedule info from mirror node → checks signing conditions → signs if eligible.
 4. **Execution:** When the threshold is met, Hedera auto-executes the scheduled transaction.
+
+### Signing Conditions
+
+Before signing, the agent (or its tools) checks:
+
+| Condition | Source | Description |
+|-----------|--------|-------------|
+| Not executed | Mirror Node `/schedules/{id}` | Schedule must not already be executed. |
+| No valid rejections | `PROJECT_REJECTION_TOPIC` (HCS2) | Query rejection topic for messages mentioning this schedule; do not sign if other signers have rejected. |
+| Minimum signatures | Mirror Node `signatures` | Schedule should have at least 2 signatures before this agent signs (per tool description). |
+
+The agent uses `GetScheduleInfoTool` (mirror node) and `SignTransactionTool` (HAPI `ScheduleSign`). `QueryRejectionTopicTool` exists for rejection checks when `PROJECT_REJECTION_TOPIC` is configured.
 
 ### Why Passive?
 
-Unlike the active [KeyRing Signer Agent](https://github.com/kevincompton/keyring-signer-agent) (which polls, validates, and may reject), the passive agent:
+Unlike the active KeyRing Signer Agent (which polls, validates, and may reject), the passive agent:
 
 - **Subscribes** to an HCS topic and waits—no polling.
-- **Trusts** operator-initiated messages—signs immediately, no rejection checks.
+- **Trusts** operator/validator-initiated messages—signs when conditions are met.
 - Suited for **inactive signers**, **threshold rollover**, and **cold signers** that only run when triggered.
+
+## Hedera HIPs & Services
+
+| HIP / Service | Purpose |
+|---------------|---------|
+| **[HIP-755](https://hips.hedera.com/hip/hip-755)** | Schedule Service System Contract (HSS at `0x16b`). Base HSS interface; `authorizeSchedule`, `signSchedule` for contracts. |
+| **[HIP-1215](https://hips.hedera.com/hip/hip-1215)** | Generalized Scheduled Contract Calls. `scheduleCall` used by `ScheduleReviewTrigger` to schedule `emitReviewTrigger` at a future time (automated transaction protocol). |
+| **[HIP-694](https://hips.hedera.com/hip/hip-694)** | Real-time events in JSON-RPC Relay. Listener uses `eth_subscribe` to receive `ReviewTriggered` contract events via WebSocket. |
+| **HAPI Schedule Service** | Native `ScheduleSign` transaction. Agent submits `ScheduleSignTransaction` via Hedera SDK to add its signature to a scheduled transaction. |
+| **Hedera Consensus Service (HCS)** | `TopicMessageQuery.subscribe`—agent subscribes to operator inbound topic for schedule IDs. |
+| **Mirror Node REST API** | `/api/v1/schedules/{id}`—agent fetches schedule info (signatures, executed status). |
+| **HCS2-indexed topics** | Rejection topic (`PROJECT_REJECTION_TOPIC`) for checking if a schedule has been rejected by other signers. |
 
 ## Architecture
 
@@ -36,24 +60,30 @@ graph TB
             OperatorTopic["OPERATOR_INBOUND_TOPIC_ID<br/>Operator posts schedule IDs"]
         end
         
-        Mirror["🔍 MIRROR NODE<br/>Query schedule info"]
+        Mirror["🔍 MIRROR NODE<br/>/schedules API"]
+    end
+    
+    subgraph Validator["🔐 VALIDATOR AGENT"]
+        ValidatorSchedules["Schedules ScheduleReviewTrigger<br/>1 hour before schedule expiry"]
     end
     
     subgraph Triggers["🔔 TRIGGER PATHS"]
         Direct["Direct: Operator posts<br/>schedule ID to topic"]
-        Contract["ScheduleReviewTrigger<br/>scheduleReviewTrigger(scheduleId, duration, topic1, topic2)"]
-        Contract -->|1 HBAR, schedules via HSS| Emit["At now+duration:<br/>emitReviewTrigger → ReviewTriggered"]
+        Contract["ScheduleReviewTrigger<br/>HSS.scheduleCall (HIP-1215)"]
+        Contract -->|At expirySecond| Emit["emitReviewTrigger<br/>→ ReviewTriggered event"]
         Emit --> Listener
-        Listener["Listener (eth_subscribe)<br/>Posts schedule ID to topic"]
+        Listener["Listener eth_subscribe (HIP-694)<br/>Posts schedule ID to HCS topic"]
     end
     
     subgraph Agent["🤖 KEYRING PASSIVE AGENT"]
-        Subscribe["TopicMessageQuery.subscribe"]
-        GetInfo["Get Schedule Info"]
-        Sign["Sign Transaction"]
-        Subscribe --> GetInfo --> Sign
+        Subscribe["TopicMessageQuery.subscribe (HCS)"]
+        GetInfo["Get Schedule Info (Mirror)"]
+        RejectCheck["Query Rejection Topic (HCS2)"]
+        Sign["ScheduleSignTransaction (HAPI)"]
+        Subscribe --> GetInfo --> RejectCheck --> Sign
     end
     
+    ValidatorSchedules --> Contract
     Direct --> OperatorTopic
     Listener --> OperatorTopic
     OperatorTopic --> Subscribe
@@ -65,8 +95,9 @@ graph TB
     classDef triggerClass fill:#f59e0b,stroke:#d97706,color:#fff
     
     class Hedera,Mirror,Schedules hederaClass
-    class Agent,Subscribe,GetInfo,Sign agentClass
+    class Agent,Subscribe,GetInfo,RejectCheck,Sign agentClass
     class Triggers,Direct,Contract,Emit,Listener triggerClass
+    class Validator,ValidatorSchedules triggerClass
 ```
 
 ### Workflow
@@ -74,23 +105,29 @@ graph TB
 **1. Scheduled Transaction Creation**
 
 - Threshold account (or keyring operator) creates a scheduled transaction on Hedera.
-- Transaction waits for N-of-M signatures.
+- Transaction waits for N-of-M signatures and has an expiry window.
 
-**2. Trigger (choose one)**
+**2. Validator Schedules Trigger (Automated Path)**
 
-| Path | How |
-|------|-----|
-| **Direct** | Operator posts `{"scheduleId": "0.0.1234"}` or `0.0.1234` to `OPERATOR_INBOUND_TOPIC_ID`. |
-| **Scheduled** | Call `ScheduleReviewTrigger.scheduleReviewTrigger(scheduleId, durationSeconds, topicId1, topicId2)` with 1 HBAR. At `now + durationSeconds`, contract emits `ReviewTriggered`. Listener subscribes via `eth_subscribe`, posts schedule ID to HCS topic. |
+- Validator agent computes `durationSeconds = (scheduleExpiry - now) - 3600` (1 hour before expiry).
+- Calls `ScheduleReviewTrigger.scheduleReviewTrigger(scheduleId, durationSeconds, topicId1, topicId2)` with 1 HBAR.
+- Contract uses HSS `scheduleCall` (HIP-1215) to schedule `emitReviewTrigger` at `now + durationSeconds`.
+- At that time, network executes the scheduled call; contract emits `ReviewTriggered`.
+- Listener (eth_subscribe) receives event → posts schedule ID to HCS topic.
 
-**3. Agent Processing**
+**3. Trigger (Direct Path)**
+
+- Operator posts `{"scheduleId": "0.0.1234"}` or `0.0.1234` to `OPERATOR_INBOUND_TOPIC_ID`.
+
+**4. Agent Processing**
 
 - Agent receives message → parses schedule ID.
 - Fetches schedule info from mirror node (executed? signature count?).
-- If not executed → signs with `ScheduleSignTransaction`.
-- Skips if already executed.
+- Optionally queries rejection topic for this schedule.
+- If not executed and conditions met → signs with `ScheduleSignTransaction` (HAPI ScheduleSign).
+- Skips if already executed or rejected.
 
-**4. Execution**
+**5. Execution**
 
 - When threshold is met, Hedera executes the scheduled transaction on-chain.
 
@@ -98,7 +135,8 @@ graph TB
 
 - ✅ **Scheduled signing:** Signs Hedera scheduled transactions when notified.
 - ✅ **Multi-agent:** Run multiple signers in one process; each has its own account.
-- ✅ **Two trigger paths:** Direct operator topic or `ScheduleReviewTrigger` + listener.
+- ✅ **Two trigger paths:** Direct operator topic or validator-initiated `ScheduleReviewTrigger` (HSS `scheduleCall`).
+- ✅ **Signing conditions:** Executed check, optional rejection topic check, signature count.
 - ✅ **HCS subscription:** Real-time via `TopicMessageQuery.subscribe`—no polling.
 - ✅ **Utilities:** Create accounts, fund agents, send test schedules via contract.
 
@@ -129,6 +167,7 @@ AGENT_CONFIGS='[{"accountId":"0.0.1","privateKey":"302e...","operatorPublicKey":
 # Shared config
 HEDERA_NETWORK=testnet
 OPERATOR_INBOUND_TOPIC_ID=0.0.xxxxx   # Topic where operator posts schedule IDs
+PROJECT_REJECTION_TOPIC=0.0.xxxxx    # Optional: for rejection checks
 ```
 
 Single-agent fallback: set `HEDERA_ACCOUNT_ID`, `HEDERA_PRIVATE_KEY`, `OPERATOR_PUBLIC_KEY`.
@@ -151,14 +190,15 @@ keyring-passive-agent/
 │   ├── config/             # Config loading
 │   │   └── load-config.ts
 │   ├── tools/              # Agent tools
-│   │   ├── get-schedule-info.ts
-│   │   └── sign-transaction.ts
+│   │   ├── get-schedule-info.ts    # Mirror node schedule query
+│   │   ├── sign-transaction.ts     # HAPI ScheduleSign
+│   │   └── query-rejection-topic.ts # HCS2 rejection topic
 │   ├── utils/              # Utility scripts
 │   │   ├── createAgentAccounts.ts
 │   │   ├── fundAgentAccounts.ts
 │   │   └── sendTestSchedule.ts
 │   └── index.ts            # Entry point
-├── hardhat/                # ScheduleReviewTrigger contract
+├── hardhat/                # ScheduleReviewTrigger (HSS scheduleCall)
 │   ├── contracts/
 │   └── scripts/
 ├── docs/
@@ -189,17 +229,18 @@ The operator topic expects messages containing a schedule ID:
 
 ## ScheduleReviewTrigger Contract
 
-The contract enables **time-delayed** triggers: schedule a future execution that emits `ReviewTriggered(scheduleId, topicId1, topicId2)`.
+The contract enables **time-delayed** triggers via the Hedera Schedule Service (HIP-1215):
 
 - **`scheduleReviewTrigger(scheduleId, durationSeconds, topicId1, topicId2)`** — payable, requires 1 HBAR.
-- Schedules a one-time call at `now + durationSeconds` (max 62 days).
-- When it runs, emits `ReviewTriggered`; listener subscribes via `eth_subscribe` and posts schedule ID to the HCS topic.
+- Uses HSS `scheduleCall` at `0x16b` to schedule a one-time call to `emitReviewTrigger` at `now + durationSeconds` (max 62 days).
+- When the scheduled time arrives, the network executes the call; contract emits `ReviewTriggered(scheduleId, topicId1, topicId2)`.
+- Listener subscribes via `eth_subscribe` (HIP-694) and posts the schedule ID to the HCS topic.
 
 See [docs/event-trigger-stack.md](./docs/event-trigger-stack.md) for the full listener stack.
 
 ## Technologies
 
-- **Hedera SDK:** HCS subscription, `ScheduleSignTransaction`, mirror node queries
+- **Hedera SDK:** HCS `TopicMessageQuery.subscribe`, HAPI `ScheduleSignTransaction`, mirror node queries
 - **TypeScript:** Type-safe development
 
 ## Security Considerations
@@ -207,7 +248,7 @@ See [docs/event-trigger-stack.md](./docs/event-trigger-stack.md) for the full li
 - Private keys stored in environment variables only
 - Never commit `.env` files
 - Operator topic should be restricted (submit key = operator only)
-- Agent trusts operator-initiated messages—ensure operator is secure
+- Agent trusts operator/validator-initiated messages—ensure operator is secure
 
 ## License
 
