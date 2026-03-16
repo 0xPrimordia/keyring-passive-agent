@@ -1,0 +1,39 @@
+{
+  "name": "keyring-passive-agent",
+  "version": "1.0.0",
+  "description": "passive agent for inactive signers and threshold rollover",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "contracts:build": "hardhat compile",
+    "contracts:deploy": "hardhat run hardhat/scripts/deploy.cjs --network testnet",
+    "create:accounts": "tsx src/utils/createAgentAccounts.ts",
+    "fund:agents": "tsx src/utils/fundAgentAccounts.ts",
+    "send:test-schedule": "tsx src/utils/sendTestSchedule.ts"
+  },
+  "author": "Kevin Compton",
+  "license": "ISC",
+  "devDependencies": {
+    "@nomicfoundation/hardhat-ethers": "^4.0.5",
+    "@nomicfoundation/hardhat-toolbox-mocha-ethers": "^3.0.3",
+    "ethers": "^6.16.0",
+    "hardhat": "^2.22.0",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  },
+  "dependencies": {
+    "@hashgraph/sdk": "^2.80.0",
+    "@hashgraph/smart-contracts": "github:hashgraph/hedera-smart-contracts",
+    "@langchain/core": "^1.1.30",
+    "@langchain/langgraph": "^1.2.0",
+    "@langchain/openai": "^1.2.0",
+    "dotenv": "^17.3.1",
+    "hedera-agent-kit": "^3.8.0",
+    "langchain": "^1.2.29"
+  }
+}
