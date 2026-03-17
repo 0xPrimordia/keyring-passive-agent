@@ -22,15 +22,16 @@ import {
 config();
 
 function parsePrivateKey(keyStr: string): PrivateKey {
-  const trimmed = String(keyStr).trim();
-  const hex = trimmed.startsWith("0x") ? trimmed.slice(2) : trimmed;
-  if (/^[0-9a-fA-F]{64}$/.test(hex)) {
-    return PrivateKey.fromStringECDSA(hex);
+  const raw = String(keyStr).replace(/\s/g, "").replace(/^0x/i, "");
+  if (/^[0-9a-fA-F]+$/.test(raw)) {
+    if (raw.length === 64 && !PrivateKey.isDerKey(raw)) {
+      return PrivateKey.fromStringECDSA(raw);
+    }
+    return PrivateKey.fromBytes(new Uint8Array(Buffer.from(raw, "hex")));
   }
-  if (PrivateKey.isDerKey(trimmed)) {
-    return PrivateKey.fromStringDer(trimmed);
-  }
-  return PrivateKey.fromStringECDSA(hex);
+  return PrivateKey.fromBytes(
+    new Uint8Array(Buffer.from(String(keyStr).trim(), "base64"))
+  );
 }
 
 function getAgentAccountIds(): string[] {
@@ -62,10 +63,9 @@ async function main(): Promise<void> {
   const amountHbar = parseInt(process.env.FUND_AMOUNT_HBAR ?? "50", 10);
   const amount = Hbar.fromTinybars(amountHbar * 100_000_000);
 
+  const network = process.env.HEDERA_NETWORK?.toLowerCase() ?? "testnet";
   const client =
-    process.env.HEDERA_NETWORK === "mainnet"
-      ? Client.forMainnet()
-      : Client.forTestnet();
+    network === "mainnet" ? Client.forMainnet() : Client.forTestnet();
   client.setOperator(operatorId, parsePrivateKey(operatorKey));
 
   console.log(`Funding ${accountIds.length} agent(s) with ${amountHbar} HBAR each`);

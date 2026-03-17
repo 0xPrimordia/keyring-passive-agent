@@ -50,8 +50,10 @@ async function main() {
   const contractAddress = process.env.SCHEDULE_REVIEW_CONTRACT_ID;
   const privateKey =
     process.env.HEDERA_PRIVATE_KEY || process.env.HEDERA_DEPLOYER_PRIVATE_KEY;
+  const network = process.env.HEDERA_NETWORK?.toLowerCase() ?? "testnet";
   const rpcUrl =
-    process.env.HEDERA_RPC_URL || "https://testnet.hashio.io/api";
+    process.env.HEDERA_RPC_URL ||
+    (network === "mainnet" ? "https://mainnet.hashio.io/api" : "https://testnet.hashio.io/api");
 
   if (!contractAddress || !privateKey) {
     throw new Error(
@@ -85,6 +87,7 @@ async function main() {
   console.log("Topic 1 (inbound):", topicId1);
   console.log("Topic 2 (inbound):", topicId2);
   console.log("Duration:", DURATION_SECONDS, "seconds");
+  console.log("Network:", network);
   console.log("");
 
   console.log("Sending scheduleReviewTrigger tx (1 HBAR)...");

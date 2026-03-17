@@ -10,7 +10,7 @@
     "dev": "tsx src/index.ts",
     "test": "echo \"Error: no test specified\" && exit 1",
     "contracts:build": "hardhat compile",
-    "contracts:deploy": "hardhat run hardhat/scripts/deploy.cjs --network testnet",
+    "contracts:deploy": "hardhat run hardhat/scripts/deploy.cjs --network ${HEDERA_NETWORK:-testnet}",
     "create:accounts": "tsx src/utils/createAgentAccounts.ts",
     "fund:agents": "tsx src/utils/fundAgentAccounts.ts",
     "send:test-schedule": "tsx src/utils/sendTestSchedule.ts"

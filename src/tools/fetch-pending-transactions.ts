@@ -26,13 +26,18 @@ export class FetchPendingTransactionsTool extends StructuredTool {
 
   constructor(
     private readonly client: Client,
-    private readonly agentPublicKey: string
+    private readonly agentPublicKey: string,
+    private readonly networkOverride?: string
   ) {
     super();
   }
 
   private getMirrorNodeUrl(): string {
-    const network = this.client.ledgerId?.toString() ?? 'testnet';
+    const network =
+      this.networkOverride ??
+      this.client.ledgerId?.toString()?.toLowerCase() ??
+      process.env.HEDERA_NETWORK?.toLowerCase() ??
+      'testnet';
     return network === 'mainnet'
       ? 'https://mainnet.mirrornode.hedera.com'
       : 'https://testnet.mirrornode.hedera.com';

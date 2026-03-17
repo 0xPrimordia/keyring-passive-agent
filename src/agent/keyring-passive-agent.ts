@@ -50,12 +50,12 @@ export class KeyringPassiveAgent {
   private async initializeBlockchainTools(): Promise<void> {
     console.log('🔧 Initializing blockchain tools...');
 
-    const network = this.config.hederaNetwork ?? 'testnet';
+    const network = (this.config.hederaNetwork ?? 'testnet').toLowerCase();
     this.client =
       network === 'mainnet' ? Client.forMainnet() : Client.forTestnet();
     this.client.setOperator(this.config.accountId, this.config.privateKey);
 
-    this.getScheduleInfoTool = new GetScheduleInfoTool(this.client);
+    this.getScheduleInfoTool = new GetScheduleInfoTool(this.client, network);
     this.signTransactionTool = new SignTransactionTool(this.client);
 
     console.log('✅ Blockchain tools initialized');

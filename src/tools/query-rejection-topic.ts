@@ -16,7 +16,7 @@ export class QueryRejectionTopicTool extends StructuredTool {
     limit: z.number().optional().default(50).describe('Max messages to fetch (default 50)'),
   });
 
-  constructor(private readonly network: string = 'testnet') {
+  constructor(private readonly network: string = process.env.HEDERA_NETWORK?.toLowerCase() ?? 'testnet') {
     super();
   }
 
