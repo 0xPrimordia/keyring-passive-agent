@@ -68,7 +68,7 @@ async function main() {
   );
   const artifact = JSON.parse(readFileSync(artifactPath, "utf-8"));
 
-  const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
+  const provider = new ethers.JsonRpcProvider(rpcUrl);
   const signer = new ethers.Wallet(privateKey, provider);
   const contract = new ethers.Contract(
     contractAddress,
@@ -93,7 +93,7 @@ async function main() {
     DURATION_SECONDS,
     topicId1,
     topicId2,
-    { value: ethers.utils.parseEther("1") }
+    { value: ethers.parseEther("1") }
   );
   console.log("Tx hash:", tx.hash);
   const receipt = await tx.wait();
