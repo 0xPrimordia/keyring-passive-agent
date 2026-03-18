@@ -147,7 +147,7 @@ The contract lives in `hardhat/contracts/ScheduleReviewTrigger.sol` in this repo
 
 ```bash
 npm run contracts:build
-# Set HEDERA_DEPLOYER_PRIVATE_KEY in .env, then:
+# Set CONTRACT_OPERATOR_KEY in .env, then:
 npm run contracts:deploy
 ```
 

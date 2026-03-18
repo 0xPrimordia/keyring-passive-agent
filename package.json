@@ -10,7 +10,7 @@
     "dev": "tsx src/index.ts",
     "test": "echo \"Error: no test specified\" && exit 1",
     "contracts:build": "hardhat compile",
-    "contracts:deploy": "hardhat run hardhat/scripts/deploy.cjs --network ${HEDERA_NETWORK:-testnet}",
+    "contracts:deploy": "node -e \"require('dotenv').config(); require('child_process').execSync('npx hardhat run hardhat/scripts/deploy.cjs --network ' + (process.env.HEDERA_NETWORK || 'testnet'), {stdio:'inherit', env:process.env})\"",
     "create:accounts": "tsx src/utils/createAgentAccounts.ts",
     "fund:agents": "tsx src/utils/fundAgentAccounts.ts",
     "send:test-schedule": "tsx src/utils/sendTestSchedule.ts"

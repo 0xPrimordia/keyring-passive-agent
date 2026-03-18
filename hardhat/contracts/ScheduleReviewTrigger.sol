@@ -23,6 +23,9 @@ contract ScheduleReviewTrigger {
         string topicId2
     );
 
+    /// @notice Only this address (validator agent) may call scheduleReviewTrigger.
+    address public immutable validator;
+
     /// 1 HBAR = 10^8 tinybars (Hedera EVM uses 8 decimals for msg.value)
     uint256 public constant FEE_HBAR_WEI = 100_000_000;
 
@@ -35,8 +38,13 @@ contract ScheduleReviewTrigger {
     IHederaScheduleService internal constant HSS =
         IHederaScheduleService(address(0x16b));
 
+    /// @param _validator EVM address of the validator agent (VALIDATOR_ACCOUNT_ID).
+    ///        For Hedera account 0.0.X, use 0x0000...0000 + accountNum as hex.
     /// @notice Allow initial HBAR funding at deploy time (e.g. for scheduled execution gas).
-    constructor() payable {}
+    constructor(address _validator) payable {
+        require(_validator != address(0), "validator required");
+        validator = _validator;
+    }
 
     /// @notice Schedule a one-time trigger to emit ReviewTriggered(scheduleId, topicId1, topicId2) after durationSeconds.
     /// @param scheduleId The Hedera schedule ID (e.g. "0.0.1234") for the passive agent to review.
@@ -50,6 +58,7 @@ contract ScheduleReviewTrigger {
         string calldata topicId1,
         string calldata topicId2
     ) external payable {
+        require(msg.sender == validator, "Only validator");
         require(msg.value >= FEE_HBAR_WEI, "Fee: 1 HBAR required");
         require(bytes(scheduleId).length > 0, "scheduleId required");
         require(bytes(topicId1).length > 0, "topicId1 required");

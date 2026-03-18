@@ -34,12 +34,20 @@ function parsePrivateKey(keyStr: string): PrivateKey {
   );
 }
 
+function parseAgentConfigsJson(raw: string): unknown {
+  let json = raw.trim();
+  if ((json.startsWith("'") && json.endsWith("'")) || (json.startsWith('"') && json.endsWith('"'))) {
+    json = json.slice(1, -1);
+  }
+  return JSON.parse(json);
+}
+
 function getAgentAccountIds(): string[] {
   const raw = process.env.AGENT_CONFIGS;
   if (!raw) {
     throw new Error("AGENT_CONFIGS required (JSON array with accountId)");
   }
-  const configs = JSON.parse(raw) as Array<{ accountId?: string }>;
+  const configs = parseAgentConfigsJson(raw) as Array<{ accountId?: string }>;
   return configs
     .map((c) => c.accountId)
     .filter((id): id is string => typeof id === "string" && id.length > 0);

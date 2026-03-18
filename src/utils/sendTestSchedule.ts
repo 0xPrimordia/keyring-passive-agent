@@ -2,7 +2,7 @@
  * Sends a test schedule to ScheduleReviewTrigger (60s delay).
  * Emits ReviewTriggered(scheduleId, topicId1, topicId2) for the listener stack.
  *
- * Requires: SCHEDULE_REVIEW_CONTRACT_ID, HEDERA_PRIVATE_KEY (or HEDERA_DEPLOYER_PRIVATE_KEY),
+ * Requires: SCHEDULE_REVIEW_CONTRACT_ID, VALIDATOR_PRIVATE_KEY (validator is the only allowed caller),
  *           OPERATOR_INBOUND_TOPIC_ID (or AGENT_CONFIGS with inboundTopicId for 2 agents)
  */
 import "dotenv/config";
@@ -28,7 +28,11 @@ function getInboundTopicIds(): [string, string] {
       "OPERATOR_INBOUND_TOPIC_ID or AGENT_CONFIGS (with inboundTopicId) required"
     );
   }
-  const configs = JSON.parse(raw) as Array<{ inboundTopicId?: string }>;
+  let json = raw.trim();
+  if ((json.startsWith("'") && json.endsWith("'")) || (json.startsWith('"') && json.endsWith('"'))) {
+    json = json.slice(1, -1);
+  }
+  const configs = JSON.parse(json) as Array<{ inboundTopicId?: string }>;
   const ids = configs
     .map((c) => c.inboundTopicId)
     .filter((id): id is string => typeof id === "string" && id.length > 0);
@@ -48,8 +52,7 @@ function getInboundTopicIds(): [string, string] {
 
 async function main() {
   const contractAddress = process.env.SCHEDULE_REVIEW_CONTRACT_ID;
-  const privateKey =
-    process.env.HEDERA_PRIVATE_KEY || process.env.HEDERA_DEPLOYER_PRIVATE_KEY;
+  const privateKey = process.env.VALIDATOR_PRIVATE_KEY;
   const network = process.env.HEDERA_NETWORK?.toLowerCase() ?? "testnet";
   const rpcUrl =
     process.env.HEDERA_RPC_URL ||
@@ -57,7 +60,7 @@ async function main() {
 
   if (!contractAddress || !privateKey) {
     throw new Error(
-      "Set SCHEDULE_REVIEW_CONTRACT_ID and HEDERA_PRIVATE_KEY (or HEDERA_DEPLOYER_PRIVATE_KEY) in .env"
+      "Set SCHEDULE_REVIEW_CONTRACT_ID and VALIDATOR_PRIVATE_KEY in .env (only validator may call scheduleReviewTrigger)"
     );
   }
 

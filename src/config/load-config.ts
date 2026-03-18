@@ -35,7 +35,12 @@ export async function loadAgentConfigs(): Promise<AgentInstanceConfig[]> {
   const agentConfigsRaw = env.AGENT_CONFIGS;
   if (agentConfigsRaw) {
     try {
-      const parsed = JSON.parse(agentConfigsRaw) as unknown;
+      // Strip shell-style quoting (deploy platforms often wrap in ' or ")
+      let json = agentConfigsRaw.trim();
+      if ((json.startsWith("'") && json.endsWith("'")) || (json.startsWith('"') && json.endsWith('"'))) {
+        json = json.slice(1, -1);
+      }
+      const parsed = JSON.parse(json) as unknown;
       if (!Array.isArray(parsed)) {
         throw new Error('AGENT_CONFIGS must be a JSON array');
       }

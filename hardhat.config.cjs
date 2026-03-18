@@ -16,15 +16,11 @@ module.exports = {
   networks: {
     testnet: {
       url: process.env.HEDERA_RPC_URL || "https://testnet.hashio.io/api",
-      accounts: (process.env.HEDERA_DEPLOYER_PRIVATE_KEY || process.env.HEDERA_PRIVATE_KEY)
-        ? [process.env.HEDERA_DEPLOYER_PRIVATE_KEY || process.env.HEDERA_PRIVATE_KEY]
-        : [],
+      accounts: process.env.CONTRACT_OPERATOR_KEY ? [process.env.CONTRACT_OPERATOR_KEY] : [],
     },
     mainnet: {
       url: process.env.HEDERA_RPC_URL || "https://mainnet.hashio.io/api",
-      accounts: (process.env.HEDERA_DEPLOYER_PRIVATE_KEY || process.env.HEDERA_PRIVATE_KEY)
-        ? [process.env.HEDERA_DEPLOYER_PRIVATE_KEY || process.env.HEDERA_PRIVATE_KEY]
-        : [],
+      accounts: process.env.CONTRACT_OPERATOR_KEY ? [process.env.CONTRACT_OPERATOR_KEY] : [],
     },
   },
 };
