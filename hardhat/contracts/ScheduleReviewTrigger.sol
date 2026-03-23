@@ -23,7 +23,7 @@ contract ScheduleReviewTrigger {
         string topicId2
     );
 
-    /// @notice Only this address (validator agent) may call scheduleReviewTrigger.
+    /// @notice Only this address (contract operator) may call scheduleReviewTrigger.
     address public immutable validator;
 
     /// 1 HBAR = 10^8 tinybars (Hedera EVM uses 8 decimals for msg.value)
@@ -38,7 +38,7 @@ contract ScheduleReviewTrigger {
     IHederaScheduleService internal constant HSS =
         IHederaScheduleService(address(0x16b));
 
-    /// @param _validator EVM address of the validator agent (VALIDATOR_ACCOUNT_ID).
+    /// @param _validator EVM address of the contract operator (CONTRACT_OPERATOR).
     ///        For Hedera account 0.0.X, use 0x0000...0000 + accountNum as hex.
     /// @notice Allow initial HBAR funding at deploy time (e.g. for scheduled execution gas).
     constructor(address _validator) payable {

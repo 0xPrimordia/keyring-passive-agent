@@ -2,6 +2,15 @@
 
 Passive agent signers for the KeyRing protocol on Hedera network. Signs scheduled transactions when notified—no polling, no active monitoring.
 
+## Related Repositories
+
+| Repo | Purpose |
+|------|---------|
+| [0xPrimordia/KeyRing](https://github.com/0xPrimordia/KeyRing) | KeyRing Protocol – threshold list registry, governance platform |
+| [0xPrimordia/lynx](https://github.com/0xPrimordia/lynx) | Lynx Token DAO – minting and governance dashboard |
+| [kevincompton/keyring-signer-agent](https://github.com/kevincompton/keyring-signer-agent) | Validator agent – polls, validates, signs; schedules `ScheduleReviewTrigger` |
+| [kevincompton/keyring-schedule-listener](https://github.com/kevincompton/keyring-schedule-listener) | Listens for `ReviewTriggered` events; posts schedule IDs to HCS topics |
+
 ## Overview
 
 The KeyRing protocol uses **threshold multi-signature scheduled transactions** on Hedera. A scheduled transaction requires N-of-M signatures before it executes. The KeyRing Passive Agent is a signer that **does not poll** for pending schedules. Instead, it subscribes to an HCS topic and signs only when the keyring operator (or upstream trigger) posts a schedule ID.

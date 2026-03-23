@@ -2,7 +2,7 @@
  * Sends a test schedule to ScheduleReviewTrigger (60s delay).
  * Emits ReviewTriggered(scheduleId, topicId1, topicId2) for the listener stack.
  *
- * Requires: SCHEDULE_REVIEW_CONTRACT_ID, VALIDATOR_PRIVATE_KEY (validator is the only allowed caller),
+ * Requires: SCHEDULE_REVIEW_CONTRACT_ID, CONTRACT_OPERATOR_KEY (only allowed caller),
  *           OPERATOR_INBOUND_TOPIC_ID (or AGENT_CONFIGS with inboundTopicId for 2 agents)
  */
 import "dotenv/config";
@@ -52,7 +52,7 @@ function getInboundTopicIds(): [string, string] {
 
 async function main() {
   const contractAddress = process.env.SCHEDULE_REVIEW_CONTRACT_ID;
-  const privateKey = process.env.VALIDATOR_PRIVATE_KEY;
+  const privateKey = process.env.CONTRACT_OPERATOR_KEY;
   const network = process.env.HEDERA_NETWORK?.toLowerCase() ?? "testnet";
   const rpcUrl =
     process.env.HEDERA_RPC_URL ||
@@ -60,7 +60,7 @@ async function main() {
 
   if (!contractAddress || !privateKey) {
     throw new Error(
-      "Set SCHEDULE_REVIEW_CONTRACT_ID and VALIDATOR_PRIVATE_KEY in .env (only validator may call scheduleReviewTrigger)"
+      "Set SCHEDULE_REVIEW_CONTRACT_ID and CONTRACT_OPERATOR_KEY in .env (only contract operator may call scheduleReviewTrigger)"
     );
   }
 
