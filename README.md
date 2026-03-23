@@ -248,6 +248,9 @@ The operator topic expects messages containing a schedule ID:
 | Agent 1 inbound topic | `0.0.10379026` | [View →](https://hashscan.io/mainnet/topic/0.0.10379026) |
 | Agent 2 inbound topic | `0.0.10379029` | [View →](https://hashscan.io/mainnet/topic/0.0.10379029) |
 
+**Schedule history:** [KeyRing Registry (Schedules tab)](https://keyring.lynxify.xyz/registry?tab=schedules)
+| Schedule history | KeyRing Registry | [View →](https://keyring.lynxify.xyz/registry?tab=schedules) |
+
 ## ScheduleReviewTrigger Contract
 
 **Mainnet:** [`0xe96681cf23bb16f96DD3093FB989A354Ab731947`](https://hashscan.io/mainnet/contract/0xe96681cf23bb16f96DD3093FB989A354Ab731947)
