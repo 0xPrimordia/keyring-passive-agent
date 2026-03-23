@@ -236,6 +236,18 @@ The operator topic expects messages containing a schedule ID:
 - **JSON:** `{"scheduleId": "0.0.1234"}` or `{"schedule_id": "0.0.1234"}`
 - **Plain:** `0.0.1234`
 
+## Mainnet Deployment (for Judges)
+
+| Resource | ID | HashScan |
+|----------|-----|----------|
+| ScheduleReviewTrigger contract | `0xe96681cf23bb16f96DD3093FB989A354Ab731947` | [View →](https://hashscan.io/mainnet/contract/0xe96681cf23bb16f96DD3093FB989A354Ab731947) |
+| Threshold account | `0.0.10379056` | [View →](https://hashscan.io/mainnet/account/0.0.10379056) |
+| Operator inbound topic | `0.0.10379313` | [View →](https://hashscan.io/mainnet/topic/0.0.10379313) |
+| Validator inbound topic | `0.0.10379414` | [View →](https://hashscan.io/mainnet/topic/0.0.10379414) |
+| Rejection topic | `0.0.10379406` | [View →](https://hashscan.io/mainnet/topic/0.0.10379406) |
+| Agent 1 inbound topic | `0.0.10379026` | [View →](https://hashscan.io/mainnet/topic/0.0.10379026) |
+| Agent 2 inbound topic | `0.0.10379029` | [View →](https://hashscan.io/mainnet/topic/0.0.10379029) |
+
 ## ScheduleReviewTrigger Contract
 
 **Mainnet:** [`0xe96681cf23bb16f96DD3093FB989A354Ab731947`](https://hashscan.io/mainnet/contract/0xe96681cf23bb16f96DD3093FB989A354Ab731947)
