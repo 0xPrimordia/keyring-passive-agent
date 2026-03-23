@@ -238,6 +238,8 @@ The operator topic expects messages containing a schedule ID:
 
 ## ScheduleReviewTrigger Contract
 
+**Mainnet:** [`0xe96681cf23bb16f96DD3093FB989A354Ab731947`](https://hashscan.io/mainnet/contract/0xe96681cf23bb16f96DD3093FB989A354Ab731947)
+
 The contract enables **time-delayed** triggers via the Hedera Schedule Service (HIP-1215):
 
 - **`scheduleReviewTrigger(scheduleId, durationSeconds, topicId1, topicId2)`** — payable, requires 1 HBAR.
