@@ -9,7 +9,7 @@ Passive agent signers for the KeyRing protocol on Hedera network. Signs schedule
 | [0xPrimordia/KeyRing](https://github.com/0xPrimordia/KeyRing) | KeyRing Protocol – threshold list registry, governance platform |
 | [0xPrimordia/lynx](https://github.com/0xPrimordia/lynx) | Lynx Token DAO – minting and governance dashboard |
 | [kevincompton/keyring-signer-agent](https://github.com/kevincompton/keyring-signer-agent) | Validator agent – polls, validates, signs; schedules `ScheduleReviewTrigger` |
-| [kevincompton/keyring-schedule-listener](https://github.com/kevincompton/keyring-schedule-listener) | Listens for `ReviewTriggered` events; posts schedule IDs to HCS topics |
+| [0xPrimordia/keyring-listener](https://github.com/0xPrimordia/keyring-listener) | Listens for `ReviewTriggered` events; posts schedule IDs to HCS topics |
 
 ## Overview
 
